@@ -26,6 +26,11 @@ public class BasicXMLParser: NSObject, XMLParserDelegate {
         parser = XMLParser(data: xml.data(using: .utf8)!)
     }
 
+    public init(url: URL) throws {
+        guard let inputStream = InputStream(url: url) else { throw GPXParserError.noStreamCreated }
+        parser = XMLParser(stream: inputStream)
+    }
+
     public func parse() -> Result<XMLNode, BasicXMLParserError> {
         parser.delegate = self
         if parser.parse() {

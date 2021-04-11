@@ -5,6 +5,8 @@ import FoundationXML
 
 /// Error descringing export erros
 public enum GPXParserError: Error, Equatable {
+    /// The input stream of a given url could not be created
+    case noStreamCreated
     /// The provided xml contains no valid GPX.
 	case invalidGPX
     // No tracks where found in the provided GPX xml.
@@ -29,6 +31,10 @@ internal enum GPXTags: String {
 internal enum GPXAttributes: String {
 	case latitude = "lat"
 	case longitude = "lon"
+}
+
+class GPXParser {
+
 }
 
 /// Class for importing a GPX xml to an `GPXTrack` value.
@@ -73,6 +79,54 @@ final public class GPXFileParser {
 		guard let node = segmentNode else { return [] }
 		return node.childrenOfType(.trackPoint).compactMap(TrackPoint.init)
 	}
+}
+
+/// Class for importing a GPX xml to an `GPXTrack` value.
+final public class GPXStreamParser {
+    private let url: URL
+
+    /// Initializer
+    /// - Parameter url: The URL of an  GPX file. See [GPX specification for details](https://www.topografix.com/gpx.asp).
+    public init(url: URL) {
+        self.url = url
+    }
+
+    /// Parses the GPX xml.
+    /// - Returns: A `Result` of the `GPXTrack` in the success or an `GPXParserError` in the failure case.
+    public func parse() -> Result<GPXTrack, GPXParserError> {
+        do {
+            let parser = try BasicXMLParser(url: url)
+            switch parser.parse() {
+            case let .success(root):
+                guard let track = parseRoot(node: root) else { return .failure(.noTracksFound) }
+                return .success(track)
+            case let .failure(error):
+                switch error {
+                case .noContent:
+                    return .failure(.invalidGPX)
+                case let .parseError(error, lineNumber):
+                    return .failure(.parseError(error, lineNumber))
+                }
+            }
+        } catch {
+            return .failure(.noStreamCreated)
+        }
+    }
+
+    private func parseRoot(node: XMLNode) -> GPXTrack? {
+        guard let trackNode = node.childFor(.track),
+              let title = trackNode.childFor(.name)?.content else { return nil }
+        return GPXTrack(date: node.childFor(.metadata)?.childFor(.time)?.date, title: title, trackPoints: parseSegment(trackNode.childFor(.trackSegment)))
+    }
+
+    private func parseMetaData(_ node: XMLNode) -> Date? {
+        return node.childFor(.time)?.date
+    }
+
+    private func parseSegment(_ segmentNode: XMLNode?) -> [TrackPoint] {
+        guard let node = segmentNode else { return [] }
+        return node.childrenOfType(.trackPoint).compactMap(TrackPoint.init)
+    }
 }
 
 internal extension TrackPoint {
